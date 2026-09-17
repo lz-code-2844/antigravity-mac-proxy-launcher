@@ -217,7 +217,7 @@ def main():
         detected = detect_proxy()
         if not detected:
             print("❌ 错误：未检测到正在运行的代理软件（Clash Verge、Mihomo 等未启动或未监听常见端口）。")
-            print("💡 提示：您可以启动代理软件后重试，或使用 --port 指定端口，例如: agy-proxy-sync --port 7897")
+            print("💡 提示：您可以启动代理软件后重试，或使用 --port 指定端口，例如: agy-proxy-sync --port 7890")
             if not args.silent:
                 send_notification("Antigravity 代理同步失败", "未检测到代理软件", "请确保 Clash Verge 等代理处于运行状态")
             sys.exit(1)

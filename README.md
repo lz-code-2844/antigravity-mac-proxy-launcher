@@ -122,11 +122,11 @@ AI 会自动调度该技能完成同步。
 
 ```bash
 # >>> Antigravity Proxy Auto-Sync >>>
-# 自动生成于 2026-09-17 22:44:40 (来源: macOS 系统代理配置)
+# 自动生成于 YYYY-MM-DD HH:MM:SS (来源: <检测到的代理软件或系统代理>)
 # 专供 Antigravity 免 TUN 模式及终端走代理使用
-export HTTP_PROXY="http://127.0.0.1:7897"
-export HTTPS_PROXY="http://127.0.0.1:7897"
-export ALL_PROXY="socks5://127.0.0.1:7897"
+export HTTP_PROXY="http://127.0.0.1:<PORT>"
+export HTTPS_PROXY="http://127.0.0.1:<PORT>"
+export ALL_PROXY="socks5://127.0.0.1:<PORT>"
 export NO_PROXY="localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,*.local"
 # <<< Antigravity Proxy Auto-Sync <<<
 ```
