@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Antigravity Proxy Auto-Sync Plugin
+自动检测 macOS 本地运行的代理软件（Clash Verge、Mihomo、v2rayN、Surge 等）
+并将代理环境变量安全同步写入 ~/.zshrc，使 Antigravity 免 TUN 模式无缝使用代理。
+"""
+
+import sys
+import os
+import re
+import socket
+import argparse
+import subprocess
+from datetime import datetime
+
+ZSHRC_PATH = os.path.expanduser("~/.zshrc")
+TAG_START = "# >>> Antigravity Proxy Auto-Sync >>>"
+TAG_END   = "# <<< Antigravity Proxy Auto-Sync <<<"
+
+COMMON_PORTS = [7897, 7890, 7891, 10808, 10809, 1080, 6153, 2080, 2081, 8889]
+
+def send_notification(title, subtitle, message):
+    """发送 macOS 原生系统通知"""
+    try:
+        script = f'display notification "{message}" with title "{title}" subtitle "{subtitle}"'
+        subprocess.run(["osascript", "-e", script], capture_output=True)
+    except Exception:
+        pass
+
+def is_port_open(port, host="127.0.0.1", timeout=0.8):
+    """检查本地端口是否处于监听状态"""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            return s.connect_ex((host, port)) == 0
+    except Exception:
+        return False
+
+def detect_from_scutil():
+    """从 macOS 系统代理配置读取 (scutil --proxy)"""
+    try:
+        res = subprocess.run(["scutil", "--proxy"], capture_output=True, text=True, timeout=2)
+        if res.returncode != 0:
+            return None
+        out = res.stdout
+        socks_on = "SOCKSEnable : 1" in out
+        http_on = "HTTPEnable : 1" in out
+
+        socks_port = re.search(r"SOCKSPort\s*:\s*(\d+)", out)
+        http_port = re.search(r"HTTPPort\s*:\s*(\d+)", out)
+
+        socks_p = int(socks_port.group(1)) if (socks_on and socks_port) else None
+        http_p = int(http_port.group(1)) if (http_on and http_port) else None
+
+        if socks_p or http_p:
+            port = socks_p or http_p
+            if is_port_open(port):
+                return {
+                    "source": "macOS 系统代理配置",
+                    "socks_port": socks_p or port,
+                    "http_port": http_p or port
+                }
+    except Exception:
+        pass
+    return None
+
+def detect_from_clash_verge():
+    """从 Clash Verge / Verge-Rev 配置文件读取"""
+    cfg_paths = [
+        os.path.expanduser("~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/clash-verge.yaml"),
+        os.path.expanduser("~/Library/Application Support/clash-verge/clash-verge.yaml"),
+        os.path.expanduser("~/.config/clash-verge/config.yaml"),
+    ]
+    for p in cfg_paths:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        m = re.match(r"^(?:mixed-port|port|socks-port):\s*(\d+)", line.strip())
+                        if m:
+                            port = int(m.group(1))
+                            if is_port_open(port):
+                                return {
+                                    "source": "Clash Verge 配置文件",
+                                    "socks_port": port,
+                                    "http_port": port
+                                }
+            except Exception:
+                continue
+    return None
+
+def detect_from_port_scan():
+    """扫描常用代理端口兜底"""
+    for p in COMMON_PORTS:
+        if is_port_open(p):
+            return {
+                "source": f"活跃端口扫描 ({p})",
+                "socks_port": p,
+                "http_port": p
+            }
+    return None
+
+def detect_proxy():
+    """聚合检测当前机器的代理配置"""
+    # 1. 优先读系统代理
+    cfg = detect_from_scutil()
+    if cfg:
+        return cfg
+    # 2. 读取 Clash Verge 配置文件
+    cfg = detect_from_clash_verge()
+    if cfg:
+        return cfg
+    # 3. 扫描常用端口
+    cfg = detect_from_port_scan()
+    if cfg:
+        return cfg
+    return None
+
+def clean_zshrc():
+    """从 ~/.zshrc 中移除代理同步块"""
+    if not os.path.exists(ZSHRC_PATH):
+        return False
+    with open(ZSHRC_PATH, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+    
+    pattern = re.compile(rf"{re.escape(TAG_START)}.*?{re.escape(TAG_END)}\n?", re.DOTALL)
+    if not pattern.search(content):
+        return False
+    
+    new_content = pattern.sub("", content).rstrip() + "\n"
+    with open(ZSHRC_PATH, "w", encoding="utf-8") as f:
+        f.write(new_content)
+    return True
+
+def apply_to_zshrc(http_port, socks_port, source_name):
+    """将代理配置写入/更新到 ~/.zshrc"""
+    clean_zshrc()
+    
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    block = f"""{TAG_START}
+# 自动生成于 {now_str} (来源: {source_name})
+# 专供 Antigravity 免 TUN 模式及终端走代理使用
+export HTTP_PROXY="http://127.0.0.1:{http_port}"
+export HTTPS_PROXY="http://127.0.0.1:{http_port}"
+export ALL_PROXY="socks5://127.0.0.1:{socks_port}"
+export NO_PROXY="localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,*.local"
+{TAG_END}
+"""
+    # 读取旧内容并追加
+    old_content = ""
+    if os.path.exists(ZSHRC_PATH):
+        with open(ZSHRC_PATH, "r", encoding="utf-8", errors="ignore") as f:
+            old_content = f.read()
+
+    new_content = old_content.rstrip() + "\n\n" + block
+    with open(ZSHRC_PATH, "w", encoding="utf-8") as f:
+        f.write(new_content)
+    return True
+
+def get_current_zshrc_status():
+    """检查当前 ~/.zshrc 中的代理块"""
+    if not os.path.exists(ZSHRC_PATH):
+        return None
+    with open(ZSHRC_PATH, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+    m = re.search(rf"{re.escape(TAG_START)}(.*?){re.escape(TAG_END)}", content, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    return None
+
+def main():
+    parser = argparse.ArgumentParser(description="Antigravity 代理自动同步插件")
+    parser.add_argument("--clean", "--off", action="store_true", help="清除 ~/.zshrc 中的代理配置")
+    parser.add_argument("--status", action="store_true", help="查看当前配置与检测状态")
+    parser.add_argument("--port", type=int, help="手动指定代理端口（跳过自动探测）")
+    parser.add_argument("--silent", action="store_true", help="静默模式，不弹出系统通知")
+    args = parser.parse_args()
+
+    # 状态查看
+    if args.status:
+        current = get_current_zshrc_status()
+        print("==========================================")
+        print("  ~/.zshrc 当前 Antigravity 代理配置")
+        print("==========================================")
+        if current:
+            print(current)
+        else:
+            print("（未配置代理或已被清理）")
+        print("\n正在探测当前本地活跃代理...")
+        detected = detect_proxy()
+        if detected:
+            print(f"✅ 探测成功: {detected['source']}")
+            print(f"   HTTP  端口: {detected['http_port']}")
+            print(f"   SOCKS 端口: {detected['socks_port']}")
+        else:
+            print("⚠️ 未检测到运行中的代理软件或监听端口")
+        return
+
+    # 清理操作
+    if args.clean:
+        if clean_zshrc():
+            msg = "已从 ~/.zshrc 中成功移除 Antigravity 代理配置"
+            print(f"✅ {msg}")
+            if not args.silent:
+                send_notification("Antigravity 代理配置", "已关闭代理", msg)
+        else:
+            print("ℹ️ ~/.zshrc 中未发现代理配置，无需清理")
+        return
+
+    # 获取端口
+    if args.port:
+        http_p = args.port
+        socks_p = args.port
+        source = f"手动指定端口 ({args.port})"
+    else:
+        detected = detect_proxy()
+        if not detected:
+            print("❌ 错误：未检测到正在运行的代理软件（Clash Verge、Mihomo 等未启动或未监听常见端口）。")
+            print("💡 提示：您可以启动代理软件后重试，或使用 --port 指定端口，例如: agy-proxy-sync --port 7897")
+            if not args.silent:
+                send_notification("Antigravity 代理同步失败", "未检测到代理软件", "请确保 Clash Verge 等代理处于运行状态")
+            sys.exit(1)
+        http_p = detected["http_port"]
+        socks_p = detected["socks_port"]
+        source = detected["source"]
+
+    # 写入 ~/.zshrc
+    apply_to_zshrc(http_p, socks_p, source)
+    
+    success_msg = f"已将代理端口 {http_p} ({source}) 成功同步写入 ~/.zshrc！"
+    print("==========================================")
+    print("  Antigravity 代理配置自动同步完成 ✅")
+    print("==========================================")
+    print(f"  • 检测来源: {source}")
+    print(f"  • HTTP 代理: http://127.0.0.1:{http_p}")
+    print(f"  • SOCKS5代理: socks5://127.0.0.1:{socks_p}")
+    print(f"  • 写入文件: {ZSHRC_PATH}")
+    print("\n💡 提示：Antigravity 从 Dock/启动台打开时会自动读取该配置，已彻底实现免 TUN 代理！")
+    
+    if not args.silent:
+        send_notification("Antigravity 代理已同步 ✓", f"端口 {http_p} · 免 TUN", f"已成功更新至 ~/.zshrc ({source})")
+
+if __name__ == "__main__":
+    main()

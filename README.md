@@ -1,11 +1,11 @@
-# Antigravity Mac 代理启动器
+# Antigravity Mac 代理自动同步插件 (Proxy Auto-Sync)
 
 <p align="center">
   <img src="img/logo.png" alt="Logo" width="100"/>
 </p>
 
 <p align="center">
-  <b>🚀 一键以免 TUN 代理模式启动 Antigravity，自动检测代理软件与端口</b>
+  <b>🚀 专为 macOS 打造：无需 TUN 模式、不掉登录态、自动同步本地 VPN 代理到 Antigravity</b>
 </p>
 
 <p align="center">
@@ -16,57 +16,51 @@
 </p>
 
 <p align="center">
-  <a href="README_EN.md">🇬🇧 English</a>
+  <a href="README_EN.md">🇬🇧 English Version</a>
 </p>
 
 ---
 
-## 📖 为什么需要这个工具？
+## 📖 核心痛点与本项目的解决思路
 
-Antigravity 的核心后端（`language_server`，Go 语言编写）在从 Dock 或 Launchpad 双击启动时，**不会继承终端的代理环境变量**，因此在国内网络环境下往往必须开启 Clash 的 **TUN 模式**（全局虚拟网卡）。
+在 macOS 上使用 Antigravity（Google AI 编程编辑器）时，许多国内开发者都会遇到以下痛点：
 
-TUN 模式的缺点：
-- 🔴 需要 root 权限
-- 🔴 会影响所有应用的流量（影响本地开发环境）
-- 🔴 有时与某些工具冲突（Docker、VPN 等）
+- 🔴 **不走系统代理**：Antigravity 后端的核心语言服务（Go 编写的 `language_server`）在默认情况下不读取 macOS 系统的 Wi-Fi 代理设置，必须被迫开启 Clash 的 **TUN 模式**。
+- 🔴 **TUN 模式副作用大**：需要 root 权限、接管全局网络、容易与本地 Docker/局域网设备冲突。
+- 🔴 **外部外挂启动器的硬伤**：如果使用外部脚本或 `nohup` 强行启动二进制文件注入环境变量，会**脱离 macOS 官方 LaunchServices 上下文**，导致系统安全钥匙串（Keychain Safe Storage）拒绝解密凭据，**每次打开都会被强制踢出登录，退回「Welcome to Antigravity / Sign in」界面**。
 
-**本工具的解决方案**：用 macOS 原生环境变量注入方式启动 Antigravity，让它主动识别代理，**完全不需要 TUN 模式**。
+### ✨ 本项目的终极优雅解法
+
+我们在深入分析 Antigravity 官方核心源码（`app.asar`）时发现，官方早就在代码里内置了环境变量读取机制：
+```javascript
+// Electron apps don't inherit shell environment variables when they are not launched through the terminal.
+// We need to load the shell env explicitly so the language server can discover tools in the user's environment.
+const env = { ...process.env, ...(0, shell_env_1.shellEnvSync)() };
+```
+**Antigravity 启动时，会自动读取用户 `~/.zshrc` 中的环境变量并注入给后台语言服务！**
+
+因此，本项目采用**原生级无损自动同步方案**：
+1. 自动探测本地正在运行的代理软件（Clash Verge、Mihomo、v2rayN、Surge 等）及其监听端口。
+2. 将标准代理配置以**安全隔离标记块**写入 `~/.zshrc`。
+3. **日常照常从 Dock / 启动台正常点击打开 Antigravity** —— 享受官方钥匙串授权，**100% 保持登录态，免 TUN 畅快走代理**！
 
 ---
 
 ## ✨ 功能特性
 
-| 功能 | 说明 |
-|------|------|
-| 🔍 自动检测代理 | 自动读取 macOS 系统代理配置，识别运行中的代理软件 |
-| 🔄 兜底端口扫描 | 系统代理未配置时自动扫描常用端口 |
-| ✍️ 手动输入端口 | 检测失败时支持手动输入 |
-| 🖱️ 一键启动 | 双击即可确认代理配置并启动 Antigravity |
-| ❌ 一键关闭 | 可选仅关闭 Antigravity 或同时关闭代理软件 |
-| 🔁 智能切换 | 检测 Antigravity 是否已在运行，自动切换到关闭模式 |
-
-**支持的代理软件：**
-
-| 代理软件 | 自动识别 | 系统代理优先 | 端口扫描兜底 |
-|---------|---------|-------------|------------|
-| Clash Verge / Mihomo | ✅ | ✅ | ✅ |
-| ClashX / ClashX Pro | ✅ | ✅ | ✅ |
-| V2rayN / V2rayU | ✅ | ✅ | ✅ |
-| Surge | ✅ | ✅ | ✅ |
-| Proxyman | ✅ | ✅ | ✅ |
-| ShadowsocksX-NG | ✅ | ✅ | ✅ |
-| sing-box / NekoBox | ✅ | ✅ | ✅ |
-| 其他任意代理 | — | ✅（只要开了系统代理）| ✅ |
+| 特性 | 说明 |
+| :--- | :--- |
+| 🔍 **全自动多重探测** | 自动读取 macOS 系统代理设置、Clash Verge 配置文件，并辅以活跃端口扫描 |
+| 🛡️ **安全隔离写入** | 采用 `# >>> Antigravity Proxy Auto-Sync >>>` 独立块，支持反复更新与一键清除，不污染现有环境 |
+| 🔑 **永不掉登录态** | 完全走 macOS 原生启动流程，钥匙串授权 100% 正常 |
+| 🎛️ **多种交互形态** | 提供终端 CLI 命令、桌面一键点击应用、Antigravity 内置智能体技能三种形态 |
+| 🚫 **免 TUN 模式** | Clash 只需开启普通「系统代理」和「规则模式」，轻量省电，不影响其他软件 |
 
 ---
 
 ## ⚡ 快速安装
 
-### 方法一：直接下载成品（最简单）
-
-前往 [Releases 页面](https://github.com/lz-code-2844/antigravity-mac-proxy-launcher/releases) 下载最新发布的 `Antigravity-Proxy-Launcher-macOS-vX.X.X.zip`，解压后将 `Antigravity 代理启动器.app` 拖入「应用程序」或桌面即可直接使用。
-
-### 方法二：一键脚本自动安装
+打开终端执行以下命令即可一键安装：
 
 ```bash
 git clone https://github.com/lz-code-2844/antigravity-mac-proxy-launcher.git
@@ -74,129 +68,71 @@ cd antigravity-mac-proxy-launcher
 bash install.sh
 ```
 
-安装完成后，桌面上会出现「**Antigravity 代理启动器**」图标。
-
-### 方法二：手动编译
-
-```bash
-osacompile -o ~/Applications/Antigravity\ 代理启动器.app src/launcher.applescript
-# 可选：替换图标
-cp /Applications/Antigravity.app/Contents/Resources/icon.icns \
-   ~/Applications/Antigravity\ 代理启动器.app/Contents/Resources/applet.icns
-```
+**一键安装程序会自动完成：**
+1. 安装全局 CLI 命令 `agy-proxy-sync` 到 `/opt/homebrew/bin`（或 `/usr/local/bin`）。
+2. 在桌面生成 **「一键同步VPN代理」** 点击应用。
+3. 挂载 Antigravity Agent Skill 技能。
+4. 立即执行首次代理探测并写入 `~/.zshrc`。
 
 ---
 
 ## 🖱️ 使用方法
 
-### 启动流程
+### 方式 1：桌面一键同步（最轻松）
+当您更换了 VPN 节点、代理软件或端口时，**直接双击桌面的「一键同步VPN代理」应用**，1 秒内自动完成探测并在右上角弹出通知。
 
-1. **先启动你的代理软件**（Clash Verge、V2rayN 等）
-2. **双击桌面的「Antigravity 代理启动器」**
-
-   启动器会自动检测代理端口并弹出确认对话框：
-   ```
-   ✅ 检测到代理配置：
-
-   代理软件：Clash Verge
-   SOCKS5 端口：127.0.0.1:7897
-   HTTP 端口：127.0.0.1:7897
-
-   启动后 Antigravity 的所有流量将强制走代理，
-   无需开启 TUN 模式。
-   ```
-
-3. 点击「**启动 Antigravity**」即可
-
-### 关闭流程
-
-再次**双击启动器图标**，会显示当前代理信息并提供关闭选项：
-
-- **关闭 Antigravity**：直接退出 Antigravity，其专属代理环境变量随进程销毁而自动失效；Clash / V2Ray 等系统级代理软件不受任何影响，继续正常运行。
-- **防止多开卡死**：如果 Antigravity 已经在运行中，双击不会重复开新实例，会自动将当前运行的窗口唤起到前台，避免多实例冲突卡死。
-
-### 代理检测失败时
-
-如果检测不到代理端口，会提示手动输入端口号（适用于任意代理软件的自定义端口）。
-
----
-
-## 🔧 代理检测原理
-
-启动器按以下优先级自动检测代理：
-
-```
-1. scutil --proxy (macOS 系统代理配置)
-        ↓ 未检测到
-2. 识别运行中的代理软件进程名
-        ↓ 未检测到
-3. 扫描常用端口（7897/7890/7891/1080/10808 等）
-        ↓ 仍未检测到
-4. 提示手动输入端口
-```
-
-> **提示**：建议在代理软件中开启「系统代理（System Proxy）」功能（不是 TUN），这样检测最准确、最稳定。
-
----
-
-## 🔍 代理效果验证
-
-启动后，在终端运行：
+### 方式 2：终端命令使用
+在终端随时输入以下命令：
 
 ```bash
-# 查看 language_server 进程的代理环境变量
-ps eww $(pgrep -x language_server) | tr ' ' '\n' | grep -i proxy
+# 1. 自动检测并同步当前代理到 ~/.zshrc
+agy-proxy-sync
+
+# 2. 查看当前配置与探测状态
+agy-proxy-sync --status
+
+# 3. 手动指定端口（例如指定 7890）
+agy-proxy-sync --port 7890
+
+# 4. 清理并移除 ~/.zshrc 中的代理配置
+agy-proxy-sync --clean
 ```
 
-正常输出应类似：
-```
-HTTP_PROXY=http://127.0.0.1:7897
-HTTPS_PROXY=http://127.0.0.1:7897
-ALL_PROXY=socks5://127.0.0.1:7897
-```
+### 方式 3：对话内置技能（Antigravity 专属）
+在 Antigravity 聊天窗口中，直接对 AI 说：
+> *“帮我同步一下本地代理配置”* 或 *“刷新一下代理端口”*
+
+AI 会自动调度该技能完成同步。
 
 ---
 
-## ❓ 常见问题
+## 🔧 生成的 `~/.zshrc` 示例
 
-### Q: 双击后弹出「无法验证开发者」
-**A**：右键图标 → 选「打开」→ 再次点「打开」即可，以后就不再提示。
+执行后将在您的 `~/.zshrc` 中生成如下标准隔离块：
 
-### Q: 系统提示「applet 要控制 System Events」
-**A**：点「好」允许即可，这是读取进程列表所必需的权限。
-
-### Q: 关掉 TUN 后 Antigravity 仍然报网络错误
-**A**：请检查代理软件是否正常运行，并确认所选节点对 Google API 可用。
-参考 [yuaotian/antigravity-proxy](https://github.com/yuaotian/antigravity-proxy) 的排查手册。
-
-### Q: 支持 agy CLI 吗？
-**A**：CLI 工具（`agy`）原生支持环境变量代理，直接在终端设置即可：
 ```bash
+# >>> Antigravity Proxy Auto-Sync >>>
+# 自动生成于 2026-09-17 22:44:40 (来源: macOS 系统代理配置)
+# 专供 Antigravity 免 TUN 模式及终端走代理使用
+export HTTP_PROXY="http://127.0.0.1:7897"
+export HTTPS_PROXY="http://127.0.0.1:7897"
 export ALL_PROXY="socks5://127.0.0.1:7897"
-agy
+export NO_PROXY="localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,*.local"
+# <<< Antigravity Proxy Auto-Sync <<<
 ```
 
 ---
 
-## 🛠️ 项目结构
+## ❓ 常见问题 (FAQ)
 
-```
-antigravity-mac-proxy-launcher/
-├── README.md                  # 中文文档
-├── README_EN.md               # English docs
-├── install.sh                 # 一键安装脚本
-└── src/
-    └── launcher.applescript   # 核心逻辑（AppleScript）
-```
+### Q: 为什么之前的启动器会导致 Antigravity 退出登录（跳出 Welcome 界面）？
+**A**：macOS 将用户的 Google 登录 Token 存放在系统安全钥匙串（Keychain Safe Storage）中，受 App Bundle ID 保护。通过外部脱壳脚本直接运行二进制文件会脱离 LaunchServices 上下文，钥匙串拒绝提供解密密钥，导致被强制登出。而本插件直接写入 `~/.zshrc`，允许您完全从 Dock 正常启动，彻底杜绝此问题。
+
+### Q: Clash Verge 需要开全局模式吗？
+**A**：不需要。只需保持常规的「规则模式 (Rule)」并开启「系统代理」即可，局域网和国内流量完全直连，既省电又干净。
 
 ---
 
-## 🙏 致谢
+## 📄 开源许可证
 
-- [yuaotian/antigravity-proxy](https://github.com/yuaotian/antigravity-proxy) — Windows 平台的 DLL 注入方案，本项目的灵感来源
-
----
-
-## 📄 License
-
-MIT License — 自由使用、修改、分发。
+本项目基于 [MIT License](LICENSE) 开源，欢迎自由使用、修改与 Star！

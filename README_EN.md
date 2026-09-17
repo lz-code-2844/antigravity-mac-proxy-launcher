@@ -1,11 +1,11 @@
-# Antigravity Mac Proxy Launcher
+# Antigravity Mac Proxy Auto-Sync Plugin
 
 <p align="center">
   <img src="img/logo.png" alt="Logo" width="100"/>
 </p>
 
 <p align="center">
-  <b>🚀 One-click launch Antigravity with proxy — no TUN mode required. Auto-detects your proxy app and port.</b>
+  <b>🚀 Designed for macOS: Force SOCKS5/HTTP proxy for Antigravity without TUN mode, preserving Keychain login sessions.</b>
 </p>
 
 <p align="center">
@@ -16,57 +16,39 @@
 </p>
 
 <p align="center">
-  <a href="README.md">🇨🇳 中文</a>
+  <a href="README.md">🇨🇳 中文文档</a>
 </p>
 
 ---
 
-## 📖 Why do you need this?
+## 📖 The Problem & Our Solution
 
-Antigravity's core backend (`language_server`, written in Go) **does not inherit terminal proxy environment variables** when launched from the Dock or Launchpad. This forces users in restricted networks to enable **TUN mode** in Clash (a system-wide virtual NIC).
+When using Antigravity (Google's AI coding environment) on macOS:
 
-TUN mode drawbacks:
-- 🔴 Requires root/admin privileges
-- 🔴 Proxies ALL traffic (breaks Docker, local dev servers, other VPNs)
-- 🔴 Can conflict with other tools
+- 🔴 **Ignoring System Wi-Fi Proxies**: Antigravity's core backend language server (`language_server`, compiled in Go) ignores macOS `scutil --proxy` settings. Without proxy env vars, users in restricted regions are forced to turn on Clash's **TUN mode**.
+- 🔴 **Drawbacks of TUN Mode**: Requires root privileges, intercepts global traffic, and conflicts with local Docker/LAN setups.
+- 🔴 **The Flaw of External Launchers**: Launching Antigravity directly via detached Unix scripts (`nohup`) detaches the app from the macOS LaunchServices bundle context. Consequently, the macOS Keychain blocks access to the `Antigravity Safe Storage` key, **causing users to be logged out repeatedly (showing the "Welcome to Antigravity / Sign in" screen)**.
 
-**This launcher's solution**: inject proxy environment variables at launch time using macOS native mechanisms, so Antigravity respects the proxy natively — **no TUN mode needed**.
+### ✨ The Native Solution
 
----
+Inspection of Antigravity's internal package (`app.asar`) revealed that it natively reads shell environment variables when launching its language server:
+```javascript
+// Electron apps don't inherit shell environment variables when they are not launched through the terminal.
+// We need to load the shell env explicitly so the language server can discover tools in the user's environment.
+const env = { ...process.env, ...(0, shell_env_1.shellEnvSync)() };
+```
+**Antigravity runs a login shell at startup to source `~/.zshrc` and injects those environment variables into `language_server`!**
 
-## ✨ Features
-
-| Feature | Description |
-|---------|-------------|
-| 🔍 Auto-detect proxy | Reads macOS system proxy config, identifies running proxy apps |
-| 🔄 Port scan fallback | Scans common ports when system proxy isn't configured |
-| ✍️ Manual port entry | Allows manual port input when auto-detection fails |
-| 🖱️ One-click launch | Confirm detected config and launch Antigravity |
-| ❌ One-click close | Close Antigravity only, or Antigravity + proxy together |
-| 🔁 Smart toggle | Detects running state and switches between launch/close mode |
-
-**Supported proxy apps:**
-
-| Proxy App | Auto-identified | System proxy | Port scan |
-|-----------|----------------|--------------|-----------|
-| Clash Verge / Mihomo | ✅ | ✅ | ✅ |
-| ClashX / ClashX Pro | ✅ | ✅ | ✅ |
-| V2rayN / V2rayU | ✅ | ✅ | ✅ |
-| Surge | ✅ | ✅ | ✅ |
-| Proxyman | ✅ | ✅ | ✅ |
-| ShadowsocksX-NG | ✅ | ✅ | ✅ |
-| sing-box / NekoBox | ✅ | ✅ | ✅ |
-| Any other proxy | — | ✅ (if system proxy is on) | ✅ |
+This plugin takes advantage of this native mechanism:
+1. Automatically detects active local proxy ports (Clash Verge, Mihomo, v2rayN, Surge, etc.).
+2. Synchronizes a clean, isolated block into `~/.zshrc`.
+3. You open Antigravity normally from your Dock or Launchpad — **Keychain remains fully authorized, login state is 100% preserved, and traffic seamlessly routes through your proxy without TUN mode!**
 
 ---
 
 ## ⚡ Quick Install
 
-### Option 1: Direct Download (Easiest)
-
-Go to [Releases](https://github.com/lz-code-2844/antigravity-mac-proxy-launcher/releases) and download the latest `Antigravity-Proxy-Launcher-macOS-vX.X.X.zip`. Unzip and drag `Antigravity 代理启动器.app` to your Applications or Desktop.
-
-### Option 2: One-line install script
+Run in your terminal:
 
 ```bash
 git clone https://github.com/lz-code-2844/antigravity-mac-proxy-launcher.git
@@ -74,125 +56,42 @@ cd antigravity-mac-proxy-launcher
 bash install.sh
 ```
 
-After installation, an **"Antigravity 代理启动器"** icon will appear on your Desktop.
+**The installer automatically:**
+1. Installs the global CLI tool `agy-proxy-sync` to `/opt/homebrew/bin` (or `/usr/local/bin`).
+2. Creates the **「一键同步VPN代理」** one-click applet on your Desktop.
+3. Mounts the Antigravity Agent Skill.
+4. Performs an initial proxy detection and writes to `~/.zshrc`.
 
-### Option 2: Manual compile
+---
 
+## 🖱️ Usage
+
+### Option 1: Desktop Applet (Easiest)
+Whenever you change proxy ports or switch proxy clients, **double-click the "一键同步VPN代理" applet on your Desktop**. It detects and updates your configuration in under a second.
+
+### Option 2: Command Line (CLI)
 ```bash
-osacompile -o ~/Applications/Antigravity\ 代理启动器.app src/launcher.applescript
-# Optional: use Antigravity's official icon
-cp /Applications/Antigravity.app/Contents/Resources/icon.icns \
-   ~/Applications/Antigravity\ 代理启动器.app/Contents/Resources/applet.icns
+# Auto-detect and sync current proxy to ~/.zshrc
+agy-proxy-sync
+
+# View current configuration and active proxy status
+agy-proxy-sync --status
+
+# Manually specify a port (e.g. 7890)
+agy-proxy-sync --port 7890
+
+# Clean/remove the proxy configuration from ~/.zshrc
+agy-proxy-sync --clean
 ```
 
----
+### Option 3: Antigravity Agent Skill
+Inside the Antigravity chat, tell the assistant:
+> *"Sync my local proxy configuration"* or *"Update proxy port"*
 
-## 🖱️ How to Use
-
-### Launch flow
-
-1. **Start your proxy app** (Clash Verge, V2rayN, etc.)
-2. **Double-click the launcher icon** on your Desktop
-
-   The launcher auto-detects the proxy and shows a confirmation:
-   ```
-   ✅ Proxy detected:
-
-   App: Clash Verge
-   SOCKS5: 127.0.0.1:7897
-   HTTP:   127.0.0.1:7897
-
-   All Antigravity traffic will be routed through the proxy.
-   No TUN mode required.
-   ```
-
-3. Click **"Launch Antigravity"**
-
-### Close flow
-
-**Double-click the launcher icon again** while Antigravity is running:
-
-- **Close Antigravity**: Quits Antigravity directly. The injected proxy environment variables terminate with the process, while Clash / V2Ray and other system proxy clients remain untouched.
-- **Prevent Multi-instance Freeze**: If Antigravity is already running, double-clicking will not spawn a conflicting duplicate instance; instead, it brings the existing window to the front.
-
-### When auto-detection fails
-
-If no port is detected, you'll be prompted to enter the port manually (works with any proxy on any custom port).
-
----
-
-## 🔧 How Proxy Detection Works
-
-```
-1. scutil --proxy  (macOS system proxy settings)
-        ↓ not found
-2. Identify running proxy app by process name
-        ↓ not found
-3. Scan common ports (7897/7890/7891/1080/10808 ...)
-        ↓ still not found
-4. Prompt for manual port entry
-```
-
-> **Tip**: Enable "System Proxy" (not TUN) in your proxy app for the most reliable detection.
-
----
-
-## 🔍 Verify It's Working
-
-After launching, run in Terminal:
-
-```bash
-ps eww $(pgrep -x language_server) | tr ' ' '\n' | grep -i proxy
-```
-
-Expected output:
-```
-HTTP_PROXY=http://127.0.0.1:7897
-HTTPS_PROXY=http://127.0.0.1:7897
-ALL_PROXY=socks5://127.0.0.1:7897
-```
-
----
-
-## ❓ FAQ
-
-### Q: "Cannot verify developer" dialog appears
-**A**: Right-click the icon → "Open" → click "Open" again. This is a one-time step.
-
-### Q: "applet wants to control System Events"
-**A**: Click "OK". This permission is needed to check if Antigravity is running.
-
-### Q: Antigravity still fails after disabling TUN
-**A**: Check that your proxy node actually has access to Google APIs. See [yuaotian/antigravity-proxy](https://github.com/yuaotian/antigravity-proxy) for troubleshooting guides.
-
-### Q: Does this work with the `agy` CLI?
-**A**: The CLI natively respects env vars. Just set them in your shell:
-```bash
-export ALL_PROXY="socks5://127.0.0.1:7897"
-agy
-```
-
----
-
-## 🛠️ Project Structure
-
-```
-antigravity-mac-proxy-launcher/
-├── README.md                  # Chinese docs
-├── README_EN.md               # This file
-├── install.sh                 # One-click install script
-└── src/
-    └── launcher.applescript   # Core logic
-```
-
----
-
-## 🙏 Credits
-
-- [yuaotian/antigravity-proxy](https://github.com/yuaotian/antigravity-proxy) — The Windows DLL injection counterpart that inspired this project
+The agent will invoke the skill automatically.
 
 ---
 
 ## 📄 License
 
-MIT License
+MIT License. Free for personal and commercial use.
