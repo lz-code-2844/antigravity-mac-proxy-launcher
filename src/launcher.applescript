@@ -1,6 +1,6 @@
 -- ============================================================
 -- Antigravity Mac Proxy Launcher
--- https://github.com/YOUR_USERNAME/antigravity-mac-proxy-launcher
+-- https://github.com/lz-code-2844/antigravity-mac-proxy-launcher
 --
 -- 功能 / Features:
 --   · 自动检测本机代理软件及端口 / Auto-detect proxy app & port

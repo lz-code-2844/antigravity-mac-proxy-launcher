@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================
 # Antigravity Mac Proxy Launcher — 一键安装脚本
-# https://github.com/YOUR_USERNAME/antigravity-mac-proxy-launcher
+# https://github.com/lz-code-2844/antigravity-mac-proxy-launcher
 # ==============================================================
 set -euo pipefail
 

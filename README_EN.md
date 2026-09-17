@@ -65,7 +65,7 @@ TUN mode drawbacks:
 ### Option 1: One-line install (recommended)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/antigravity-mac-proxy-launcher.git
+git clone https://github.com/lz-code-2844/antigravity-mac-proxy-launcher.git
 cd antigravity-mac-proxy-launcher
 bash install.sh
 ```
