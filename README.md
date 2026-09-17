@@ -108,8 +108,8 @@ cp /Applications/Antigravity.app/Contents/Resources/icon.icns \
 
 再次**双击启动器图标**，会显示当前代理信息并提供关闭选项：
 
-- **仅关闭 Antigravity**：保持代理软件运行
-- **关闭 Antigravity 和代理**：同时退出 Antigravity 和代理软件
+- **关闭 Antigravity**：直接退出 Antigravity，其专属代理环境变量随进程销毁而自动失效；Clash / V2Ray 等系统级代理软件不受任何影响，继续正常运行。
+- **防止多开卡死**：如果 Antigravity 已经在运行中，双击不会重复开新实例，会自动将当前运行的窗口唤起到前台，避免多实例冲突卡死。
 
 ### 代理检测失败时
 

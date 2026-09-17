@@ -108,8 +108,8 @@ cp /Applications/Antigravity.app/Contents/Resources/icon.icns \
 
 **Double-click the launcher icon again** while Antigravity is running:
 
-- **Close Antigravity only** — keeps the proxy app running
-- **Close Antigravity + proxy** — quits both
+- **Close Antigravity**: Quits Antigravity directly. The injected proxy environment variables terminate with the process, while Clash / V2Ray and other system proxy clients remain untouched.
+- **Prevent Multi-instance Freeze**: If Antigravity is already running, double-clicking will not spawn a conflicting duplicate instance; instead, it brings the existing window to the front.
 
 ### When auto-detection fails
 
