@@ -5,7 +5,8 @@
 -- 功能 / Features:
 --   · 自动检测本机代理软件及端口 / Auto-detect proxy app & port
 --   · 以代理环境变量启动 Antigravity / Launch with proxy env vars
---   · 一键关闭 Antigravity 和/或代理 / Close Antigravity and/or proxy
+--   · 一键关闭 Antigravity 专属代理（关掉应用即失效，不影响 Clash 等软件）
+--   · 防止重复启动多开卡死 / Prevent duplicate instance freeze
 --   · 无需 TUN 模式 / No TUN mode required
 -- ============================================================
 
@@ -33,22 +34,17 @@ on handleRunning(wasLaunchedByUs)
     if wasLaunchedByUs then
         -- 由本启动器以代理模式启动
         set savedInfo to my readState()
-        set msg to "Antigravity 当前以「代理模式」运行中。" & return & return & savedInfo & return & return & "请选择操作："
-        set response to button returned of (display dialog msg buttons {"取消", "仅关闭 Antigravity", "关闭 Antigravity 和代理"} default button "仅关闭 Antigravity" with title "Antigravity 代理启动器" with icon caution)
+        set msg to "Antigravity 当前以「代理模式」运行中。" & return & return & savedInfo & return & return & "关闭 Antigravity 后，对它的专属代理自动失效。" & return & "（注意：Clash / V2Ray 等代理软件将继续正常运行，不受影响）"
+        set response to button returned of (display dialog msg buttons {"取消", "关闭 Antigravity"} default button "关闭 Antigravity" with title "Antigravity 代理启动器" with icon caution)
 
-        if response is "仅关闭 Antigravity" then
+        if response is "关闭 Antigravity" then
             my closeAntigravity()
-            display notification "Antigravity 已关闭，代理软件仍在运行" with title "Antigravity 代理启动器"
-
-        else if response is "关闭 Antigravity 和代理" then
-            my closeAntigravity()
-            my closeProxyApps()
-            display notification "Antigravity 和代理软件均已关闭" with title "Antigravity 代理启动器"
+            display notification "Antigravity 已关闭，代理软件正常运行中" with title "Antigravity 代理启动器"
         end if
 
     else
         -- 由用户直接启动（普通模式）
-        set response to button returned of (display dialog "Antigravity 当前以「普通模式」运行（未经代理启动器启动）。" & return & return & "可关闭后以代理模式重新启动，以避免开启 TUN 模式。" buttons {"取消", "仅关闭", "关闭后以代理模式重启"} default button "关闭后以代理模式重启" with title "Antigravity 代理启动器" with icon note)
+        set response to button returned of (display dialog "Antigravity 当前以「普通模式」运行（未经代理启动器启动）。" & return & return & "如需免 TUN 模式使用代理，可关闭后以代理模式重新启动。" buttons {"取消", "仅关闭", "关闭后以代理模式重启"} default button "关闭后以代理模式重启" with title "Antigravity 代理启动器" with icon note)
 
         if response is "仅关闭" then
             my closeAntigravity()
@@ -66,6 +62,15 @@ end handleRunning
 -- Antigravity 未运行时的处理（检测代理并启动）
 -- ============================================================
 on handleStopped()
+    -- 二次防护：防止多开卡死
+    if my isAntigravityRunning() then
+        try
+            tell application "Antigravity" to activate
+        end try
+        display dialog "Antigravity 已经在运行中，已为您切换到前台。" & return & return & "如需关闭或重启，请再次点击启动器。" buttons {"好的"} default button "好的" with title "Antigravity 代理启动器" with icon note
+        return
+    end if
+
     set proxyData to my detectProxy()
     set socksPort to item 1 of proxyData
     set httpPort to item 2 of proxyData
@@ -99,9 +104,15 @@ on handleStopped()
     set response to button returned of (display dialog confirmMsg buttons {"取消", "启动 Antigravity"} default button "启动 Antigravity" with title "Antigravity 代理启动器" with icon note)
 
     if response is "启动 Antigravity" then
-        -- ⚠️ 关键：必须直接调用二进制而非 open -a
-        -- open -a 通过 LaunchServices 启动，不会传递环境变量给子进程
-        -- 直接调用可执行文件才能让 language_server 继承 HTTP_PROXY / ALL_PROXY
+        -- 启动前再次检测是否已在运行
+        if my isAntigravityRunning() then
+            try
+                tell application "Antigravity" to activate
+            end try
+            return
+        end if
+
+        -- ⚠️ 关键：直接调用可执行文件以继承代理环境变量
         do shell script "env HTTP_PROXY='http://" & proxyHost & ":" & httpPort & "' HTTPS_PROXY='http://" & proxyHost & ":" & httpPort & "' ALL_PROXY='socks5://" & proxyHost & ":" & socksPort & "' nohup '/Applications/Antigravity.app/Contents/MacOS/Antigravity' >/dev/null 2>&1 &"
 
         -- 保存本次启动状态
@@ -190,33 +201,31 @@ on detectProxy()
 end detectProxy
 
 -- ============================================================
--- 关闭 Antigravity 及清理状态文件
+-- 关闭 Antigravity 及清理状态文件（只关 Antigravity，绝不动外部代理软件）
 -- ============================================================
 on closeAntigravity()
+    try
+        tell application "Antigravity" to quit
+    end try
     do shell script "pkill -a -i 'Antigravity' 2>/dev/null; rm -f " & stateFile & "; true"
     delay 0.8
 end closeAntigravity
 
 -- ============================================================
--- 关闭常见代理软件
--- ============================================================
-on closeProxyApps()
-    set proxyApps to {"Clash Verge", "ClashX", "ClashX Pro", "v2rayN", "V2rayU", "Surge", "Proxyman", "ShadowsocksX-NG", "NekoBox"}
-    repeat with appName in proxyApps
-        try
-            do shell script "osascript -e 'quit app \"" & appName & "\"' 2>/dev/null; true"
-        end try
-    end repeat
-    do shell script "pkill -f 'verge-mihomo|mihomo|sing-box|xray|v2ray' 2>/dev/null; true"
-    delay 0.8
-end closeProxyApps
-
--- ============================================================
--- 判断 Antigravity 是否正在运行
+-- 判断 Antigravity 是否正在运行（双重检测：System Events + ps 进程表）
 -- ============================================================
 on isAntigravityRunning()
+    -- 方式 1：System Events 检查应用是否处于运行状态
     try
-        set r to do shell script "pgrep -x Antigravity 2>/dev/null | wc -l | tr -d ' '"
+        tell application "System Events"
+            if exists (processes whose name is "Antigravity" or bundle identifier is "com.google.antigravity") then
+                return true
+            end if
+        end tell
+    end try
+    -- 方式 2：ps 进程表检查主二进制或子进程
+    try
+        set r to do shell script "ps aux | grep -i '[A]ntigravity.app/Contents/MacOS/Antigravity' | wc -l | tr -d ' '"
         if r as integer > 0 then return true
     end try
     return false
