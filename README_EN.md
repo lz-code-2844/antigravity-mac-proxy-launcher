@@ -62,7 +62,11 @@ TUN mode drawbacks:
 
 ## ⚡ Quick Install
 
-### Option 1: One-line install (recommended)
+### Option 1: Direct Download (Easiest)
+
+Go to [Releases](https://github.com/lz-code-2844/antigravity-mac-proxy-launcher/releases) and download the latest `Antigravity-Proxy-Launcher-macOS-vX.X.X.zip`. Unzip and drag `Antigravity 代理启动器.app` to your Applications or Desktop.
+
+### Option 2: One-line install script
 
 ```bash
 git clone https://github.com/lz-code-2844/antigravity-mac-proxy-launcher.git

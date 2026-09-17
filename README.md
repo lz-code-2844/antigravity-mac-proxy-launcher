@@ -62,7 +62,11 @@ TUN 模式的缺点：
 
 ## ⚡ 快速安装
 
-### 方法一：一键脚本（推荐）
+### 方法一：直接下载成品（最简单）
+
+前往 [Releases 页面](https://github.com/lz-code-2844/antigravity-mac-proxy-launcher/releases) 下载最新发布的 `Antigravity-Proxy-Launcher-macOS-vX.X.X.zip`，解压后将 `Antigravity 代理启动器.app` 拖入「应用程序」或桌面即可直接使用。
+
+### 方法二：一键脚本自动安装
 
 ```bash
 git clone https://github.com/lz-code-2844/antigravity-mac-proxy-launcher.git
