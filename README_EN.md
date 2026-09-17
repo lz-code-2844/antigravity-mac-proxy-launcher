@@ -48,7 +48,17 @@ This plugin takes advantage of this native mechanism:
 
 ## ⚡ Quick Install
 
+### Recommended: One-line Terminal Command (Never prompts "damaged")
+
 Run in your terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lz-code-2844/antigravity-mac-proxy-launcher/main/install.sh | bash
+```
+
+> 💡 **Why this is recommended**: It compiles the applet locally on your Mac, bypassing macOS Gatekeeper's quarantine attribute and completely preventing the "App is damaged" prompt.
+
+### Option 2: Clone and Install Manually
 
 ```bash
 git clone https://github.com/lz-code-2844/antigravity-mac-proxy-launcher.git
@@ -89,6 +99,22 @@ Inside the Antigravity chat, tell the assistant:
 > *"Sync my local proxy configuration"* or *"Update proxy port"*
 
 The agent will invoke the skill automatically.
+
+---
+
+## ❓ FAQ
+
+### Q: "App is damaged and can't be opened. You should move it to the Trash."
+**A**: This is macOS Gatekeeper's quarantine mechanism.
+* **Why it happens**: When an app is downloaded from a browser (Edge / Chrome / Safari), macOS tags it with the `com.apple.quarantine` extended attribute. Unsigned or ad-hoc signed open-source apps will trigger this prompt.
+* **Quick fix**:
+  Run this single command in Terminal to strip the quarantine attribute:
+  ```bash
+  xattr -cr ~/Desktop/一键同步VPN代理.app
+  # Or if located in /Applications:
+  xattr -cr ~/Applications/一键同步VPN代理.app
+  ```
+* **Best practice**: Use the **One-line Terminal Command** above, which builds locally and completely avoids quarantine flags.
 
 ---
 

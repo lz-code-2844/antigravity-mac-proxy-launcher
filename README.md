@@ -60,7 +60,17 @@ const env = { ...process.env, ...(0, shell_env_1.shellEnvSync)() };
 
 ## ⚡ 快速安装
 
-打开终端执行以下命令即可一键安装：
+### 推荐方式：终端一行命令自动安装（推荐，永不报“已损坏”）
+
+在终端粘贴并回车运行以下命令：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lz-code-2844/antigravity-mac-proxy-launcher/main/install.sh | bash
+```
+
+> 💡 **为什么推荐此方式**：该命令会在您的 Mac 本地直接完成编译与部署，完全避开 macOS 浏览器下载隔离标记（Gatekeeper），**绝不会触发「应用已损坏」的系统误报**！
+
+### 方式二：手动克隆仓库安装
 
 ```bash
 git clone https://github.com/lz-code-2844/antigravity-mac-proxy-launcher.git
@@ -124,6 +134,18 @@ export NO_PROXY="localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,*.l
 ---
 
 ## ❓ 常见问题 (FAQ)
+
+### Q: 双击提示「“一键同步 VPN 代理”已损坏，无法打开。你应该将它移到废纸篓」怎么办？
+**A**：这是 macOS 最常见的外来软件拦截机制（Gatekeeper）。
+* **原因**：当文件通过浏览器（Edge / Chrome / Safari）下载时，macOS 会自动打上 `com.apple.quarantine`（隔离属性）。如果该软件未购买苹果年费开发者证书签名，系统就会故意弹出误导性的“已损坏”提示。
+* **两秒钟解决**：
+  在终端执行以下命令，清除隔离属性即可正常打开：
+  ```bash
+  xattr -cr ~/Desktop/一键同步VPN代理.app
+  # 如果应用放到了「应用程序」目录，则执行：
+  xattr -cr ~/Applications/一键同步VPN代理.app
+  ```
+* **一劳永逸建议**：建议其他人直接使用上方的 **「终端一行命令自动安装」**，直接在本地编译，系统天然信任，绝不会跳出损坏弹窗。
 
 ### Q: 为什么之前的启动器会导致 Antigravity 退出登录（跳出 Welcome 界面）？
 **A**：macOS 将用户的 Google 登录 Token 存放在系统安全钥匙串（Keychain Safe Storage）中，受 App Bundle ID 保护。通过外部脱壳脚本直接运行二进制文件会脱离 LaunchServices 上下文，钥匙串拒绝提供解密密钥，导致被强制登出。而本插件直接写入 `~/.zshrc`，允许您完全从 Dock 正常启动，彻底杜绝此问题。

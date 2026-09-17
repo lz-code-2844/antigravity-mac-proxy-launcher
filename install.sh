@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # ==============================================================
 # Antigravity Mac Proxy Launcher & Auto-Sync — 一键安装脚本
+# 支持直接本地运行，也支持通过 curl -fsSL ... | bash 在线安装
 # https://github.com/lz-code-2844/antigravity-mac-proxy-launcher
 # ==============================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_NAME="一键同步VPN代理"
 INSTALL_DIR="$HOME/Applications"
 OUTPUT_APP="$INSTALL_DIR/$APP_NAME.app"
 DESKTOP_APP="$HOME/Desktop/$APP_NAME.app"
+REPO_RAW="https://raw.githubusercontent.com/lz-code-2844/antigravity-mac-proxy-launcher/main"
 
 # ---------- 颜色输出 ----------
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; RED='\033[0;31m'; NC='\033[0m'
@@ -24,11 +25,42 @@ echo "  Antigravity Mac 代理自动同步插件 — 安装程序"
 echo "=================================================="
 echo ""
 
+# ---------- 准备临时工作目录 ----------
+TMP_DIR=""
+cleanup() {
+    if [ -n "$TMP_DIR" ] && [ -d "$TMP_DIR" ]; then
+        rm -rf "$TMP_DIR"
+    fi
+}
+trap cleanup EXIT
+
+# 判断是本地克隆目录还是 curl 管道流
+LOCAL_DIR=""
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]:-}" ]; then
+    LOCAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
+BIN_SRC=""
+APPLET_SRC=""
+SKILL_SRC=""
+
+if [ -n "$LOCAL_DIR" ] && [ -f "$LOCAL_DIR/bin/agy-proxy-sync" ]; then
+    BIN_SRC="$LOCAL_DIR/bin/agy-proxy-sync"
+    APPLET_SRC="$LOCAL_DIR/src/sync_applet.applescript"
+    SKILL_SRC="$LOCAL_DIR/skills/proxy-sync/SKILL.md"
+else
+    info "正在从 GitHub 获取最新组件..."
+    TMP_DIR="$(mktemp -d)"
+    curl -fsSL "$REPO_RAW/bin/agy-proxy-sync" -o "$TMP_DIR/agy-proxy-sync"
+    curl -fsSL "$REPO_RAW/src/sync_applet.applescript" -o "$TMP_DIR/sync_applet.applescript"
+    curl -fsSL "$REPO_RAW/skills/proxy-sync/SKILL.md" -o "$TMP_DIR/SKILL.md"
+    BIN_SRC="$TMP_DIR/agy-proxy-sync"
+    APPLET_SRC="$TMP_DIR/sync_applet.applescript"
+    SKILL_SRC="$TMP_DIR/SKILL.md"
+fi
+
 # ---------- 1. 安装 CLI 命令 agy-proxy-sync ----------
 echo "📦 步骤 1/4: 安装 CLI 工具 agy-proxy-sync..."
-
-BIN_SRC="$SCRIPT_DIR/bin/agy-proxy-sync"
-[ -f "$BIN_SRC" ] || err "找不到 bin/agy-proxy-sync，请确认仓库完整！"
 
 TARGET_BIN=""
 if [ -d "/opt/homebrew/bin" ] && [ -w "/opt/homebrew/bin" ]; then
@@ -48,19 +80,25 @@ ok "CLI 工具已安装至: $TARGET_BIN"
 echo "📦 步骤 2/4: 编译「一键同步VPN代理」应用..."
 mkdir -p "$INSTALL_DIR"
 
-if command -v osacompile &>/dev/null && [ -f "$SCRIPT_DIR/src/sync_applet.applescript" ]; then
-    osacompile -o "$OUTPUT_APP" "$SCRIPT_DIR/src/sync_applet.applescript"
+if command -v osacompile &>/dev/null && [ -f "$APPLET_SRC" ]; then
+    osacompile -o "$OUTPUT_APP" "$APPLET_SRC"
     
-    # 图标替换
+    # 替换图标
     ICON_SRC="/Applications/Antigravity.app/Contents/Resources/icon.icns"
     if [ -f "$ICON_SRC" ]; then
         cp "$ICON_SRC" "$OUTPUT_APP/Contents/Resources/applet.icns"
     fi
+    
+    # 移除隔离属性并重新进行本地 Ad-hoc 签名（防止报“已损坏”）
+    xattr -cr "$OUTPUT_APP" 2>/dev/null || true
+    codesign --force --deep --sign - "$OUTPUT_APP" 2>/dev/null || true
     touch "$OUTPUT_APP"
     
-    # 放置到桌面
+    # 复制到桌面
     rm -rf "$DESKTOP_APP"
     cp -R "$OUTPUT_APP" "$DESKTOP_APP"
+    xattr -cr "$DESKTOP_APP" 2>/dev/null || true
+    codesign --force --deep --sign - "$DESKTOP_APP" 2>/dev/null || true
     touch "$DESKTOP_APP"
     ok "桌面一键同步应用已生成: $DESKTOP_APP"
 else
@@ -69,7 +107,6 @@ fi
 
 # ---------- 3. 注册 Antigravity 智能体技能 ----------
 echo "📦 步骤 3/4: 注册 Antigravity Agent Skill..."
-SKILL_SRC="$SCRIPT_DIR/skills/proxy-sync/SKILL.md"
 SKILL_DST="$HOME/.gemini/config/skills/proxy-sync/SKILL.md"
 
 if [ -f "$SKILL_SRC" ]; then
