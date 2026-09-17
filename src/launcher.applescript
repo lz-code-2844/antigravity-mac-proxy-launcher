@@ -99,8 +99,10 @@ on handleStopped()
     set response to button returned of (display dialog confirmMsg buttons {"取消", "启动 Antigravity"} default button "启动 Antigravity" with title "Antigravity 代理启动器" with icon note)
 
     if response is "启动 Antigravity" then
-        -- 用环境变量方式启动
-        do shell script "env HTTP_PROXY='http://" & proxyHost & ":" & httpPort & "' HTTPS_PROXY='http://" & proxyHost & ":" & httpPort & "' ALL_PROXY='socks5://" & proxyHost & ":" & socksPort & "' open -a '/Applications/Antigravity.app' 2>/dev/null &"
+        -- ⚠️ 关键：必须直接调用二进制而非 open -a
+        -- open -a 通过 LaunchServices 启动，不会传递环境变量给子进程
+        -- 直接调用可执行文件才能让 language_server 继承 HTTP_PROXY / ALL_PROXY
+        do shell script "env HTTP_PROXY='http://" & proxyHost & ":" & httpPort & "' HTTPS_PROXY='http://" & proxyHost & ":" & httpPort & "' ALL_PROXY='socks5://" & proxyHost & ":" & socksPort & "' nohup '/Applications/Antigravity.app/Contents/MacOS/Antigravity' >/dev/null 2>&1 &"
 
         -- 保存本次启动状态
         do shell script "printf 'proxy_launched=1\\napp=" & detectedApp & "\\nsocks_port=" & socksPort & "\\nhttp_port=" & httpPort & "' > " & stateFile
