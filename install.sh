@@ -117,12 +117,34 @@ fi
 
 # ---------- 4. 立即执行一次自动同步 ----------
 echo "📦 步骤 4/4: 立即探测并同步本地代理到 ~/.zshrc..."
-"$TARGET_BIN" || warn "首次探测未发现运行中的代理软件，请启动 Clash 等代理后重新运行"
 
-echo ""
-echo "=================================================="
-ok "安装全部顺利完成！"
-echo "=================================================="
+# 预先检查 ~/.zshrc 权限
+if [ -f "$HOME/.zshrc" ]; then
+    if [ ! -w "$HOME/.zshrc" ]; then
+        warn "检测到 ~/.zshrc 权限不可写，正在尝试修复..."
+        chmod u+w "$HOME/.zshrc" 2>/dev/null || true
+        if [ ! -w "$HOME/.zshrc" ]; then
+            warn "~/.zshrc 所有者可能属于 root，尝试使用 sudo 恢复所有权..."
+            sudo chown "$USER" "$HOME/.zshrc" 2>/dev/null || true
+            chmod 644 "$HOME/.zshrc" 2>/dev/null || true
+        fi
+    fi
+else
+    touch "$HOME/.zshrc" 2>/dev/null || true
+fi
+
+if "$TARGET_BIN"; then
+    echo ""
+    echo "=================================================="
+    ok "安装及首次代理同步全部顺利完成！"
+    echo "=================================================="
+else
+    echo ""
+    warn "首次同步未完成（若未开启代理软件，请启动 Clash 等代理后运行 'agy-proxy-sync' 重试）。"
+    echo "=================================================="
+    info "组件已安装完毕（待启动代理后同步）。"
+    echo "=================================================="
+fi
 echo ""
 echo "✨ 日常使用方式（三选一）："
 echo "  1. 🖱️  双击桌面「一键同步VPN代理」图标"

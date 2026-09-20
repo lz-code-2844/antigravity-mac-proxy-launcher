@@ -12,6 +12,8 @@ import re
 import socket
 import argparse
 import subprocess
+import stat
+import pwd
 from datetime import datetime
 
 ZSHRC_PATH = os.path.expanduser("~/.zshrc")
@@ -117,21 +119,64 @@ def detect_proxy():
         return cfg
     return None
 
+def write_zshrc_safely(new_content):
+    """安全地将内容写入 ~/.zshrc，具备权限自愈与友好报错机制"""
+    if os.path.exists(ZSHRC_PATH):
+        # 尝试检查写入权限，若无权限且当前用户是文件所有者，尝试添加写权限
+        if not os.access(ZSHRC_PATH, os.W_OK):
+            try:
+                os.chmod(ZSHRC_PATH, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+            except Exception:
+                pass
+
+    try:
+        with open(ZSHRC_PATH, "w", encoding="utf-8") as f:
+            f.write(new_content)
+        return True
+    except PermissionError:
+        user_name = os.environ.get("USER", "")
+        if not user_name:
+            try:
+                user_name = os.getlogin()
+            except Exception:
+                user_name = "$(whoami)"
+        
+        owner_name = "未知"
+        try:
+            file_stat = os.stat(ZSHRC_PATH)
+            owner_name = pwd.getpwuid(file_stat.st_uid).pw_name
+        except Exception:
+            pass
+
+        print("\n" + "=" * 58)
+        print(f"❌ 权限不足：当前用户无权写入 {ZSHRC_PATH}")
+        print(f"   （该文件当前所有者为: {owner_name}）")
+        print("=" * 58)
+        print("💡 原因分析：")
+        print("   您的 ~/.zshrc 文件被设为了只读，或之前曾被以 sudo / 管理员身份")
+        print("   创建或修改过，导致普通用户无法写入。")
+        print("\n🛠️ 快速修复方法（请复制以下命令并在终端运行一次）：")
+        print(f"   sudo chown {user_name} ~/.zshrc && chmod 644 ~/.zshrc")
+        print("=" * 58 + "\n")
+        send_notification("Antigravity 代理同步失败", "权限不足", f"~/.zshrc 无法写入，所有者为 {owner_name}")
+        sys.exit(1)
+
 def clean_zshrc():
     """从 ~/.zshrc 中移除代理同步块"""
     if not os.path.exists(ZSHRC_PATH):
         return False
-    with open(ZSHRC_PATH, "r", encoding="utf-8", errors="ignore") as f:
-        content = f.read()
+    try:
+        with open(ZSHRC_PATH, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+    except Exception:
+        return False
     
     pattern = re.compile(rf"{re.escape(TAG_START)}.*?{re.escape(TAG_END)}\n?", re.DOTALL)
     if not pattern.search(content):
         return False
     
     new_content = pattern.sub("", content).rstrip() + "\n"
-    with open(ZSHRC_PATH, "w", encoding="utf-8") as f:
-        f.write(new_content)
-    return True
+    return write_zshrc_safely(new_content)
 
 def apply_to_zshrc(http_port, socks_port, source_name):
     """将代理配置写入/更新到 ~/.zshrc"""
@@ -150,13 +195,14 @@ export NO_PROXY="localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,*.l
     # 读取旧内容并追加
     old_content = ""
     if os.path.exists(ZSHRC_PATH):
-        with open(ZSHRC_PATH, "r", encoding="utf-8", errors="ignore") as f:
-            old_content = f.read()
+        try:
+            with open(ZSHRC_PATH, "r", encoding="utf-8", errors="ignore") as f:
+                old_content = f.read()
+        except Exception:
+            pass
 
     new_content = old_content.rstrip() + "\n\n" + block
-    with open(ZSHRC_PATH, "w", encoding="utf-8") as f:
-        f.write(new_content)
-    return True
+    return write_zshrc_safely(new_content)
 
 def get_current_zshrc_status():
     """检查当前 ~/.zshrc 中的代理块"""

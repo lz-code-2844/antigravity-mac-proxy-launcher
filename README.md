@@ -150,6 +150,14 @@ export NO_PROXY="localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,*.l
 ### Q: 为什么之前的启动器会导致 Antigravity 退出登录（跳出 Welcome 界面）？
 **A**：macOS 将用户的 Google 登录 Token 存放在系统安全钥匙串（Keychain Safe Storage）中，受 App Bundle ID 保护。通过外部脱壳脚本直接运行二进制文件会脱离 LaunchServices 上下文，钥匙串拒绝提供解密密钥，导致被强制登出。而本插件直接写入 `~/.zshrc`，允许您完全从 Dock 正常启动，彻底杜绝此问题。
 
+### Q: 安装或运行时提示 PermissionError: [Errno 13] Permission denied: '~/.zshrc' 怎么办？
+**A**：这是由于用户的 `~/.zshrc` 曾被使用 `sudo`（管理员权限）创建或编辑过，导致该文件的所有者变成了 `root`，当前普通用户没有写权限。
+* **快速解决**：在终端运行以下命令，将文件所有权归还给当前登录用户即可：
+  ```bash
+  sudo chown $(whoami) ~/.zshrc && chmod 644 ~/.zshrc
+  ```
+  执行完毕后，重新运行 `agy-proxy-sync` 即可成功同步！
+
 ### Q: Clash Verge 需要开全局模式吗？
 **A**：不需要。只需保持常规的「规则模式 (Rule)」并开启「系统代理」即可，局域网和国内流量完全直连，既省电又干净。
 

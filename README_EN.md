@@ -116,6 +116,14 @@ The agent will invoke the skill automatically.
   ```
 * **Best practice**: Use the **One-line Terminal Command** above, which builds locally and completely avoids quarantine flags.
 
+### Q: PermissionError: [Errno 13] Permission denied: '~/.zshrc'
+**A**: This happens when `~/.zshrc` was previously created or edited using `sudo`, leaving `root` as the owner of the file.
+* **Fix**: Reclaim ownership of your file by running:
+  ```bash
+  sudo chown $(whoami) ~/.zshrc && chmod 644 ~/.zshrc
+  ```
+  Then re-run `agy-proxy-sync`.
+
 ---
 
 ## 📄 License
